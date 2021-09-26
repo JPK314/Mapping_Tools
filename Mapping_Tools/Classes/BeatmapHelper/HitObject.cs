@@ -566,8 +566,8 @@ namespace Mapping_Tools.Classes.BeatmapHelper {
         /// <summary>
         /// Calculates the linear distance between each control point.
         /// </summary>
-        public static float QuickCalculateLength(IEnumerable<Vector2> controlPoints) {
-            float length = 0;
+        public static double QuickCalculateLength(IEnumerable<Vector2> controlPoints) {
+            double length = 0;
             Vector2? lastPoint = null;
             foreach (var cp in controlPoints) {
                 if (lastPoint.HasValue) {

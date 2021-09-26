@@ -220,7 +220,7 @@ namespace Mapping_Tools.Viewmodels {
                 }
                 if (ExportAsInvisibleSlider) {
                     var timeLength = (long)(GraphBeats / BeatsPerMinute * 60000);
-                    return 16 + 7 * (timeLength - 1);
+                    return 8 + 3 * (timeLength - 1);
                 }
                 var newLength = NewVelocity * 100 * GlobalSv * GraphBeats;
                 return (long) ((newLength - DistanceTraveled) / MinDendrite * 2 + DistanceTraveled / 10);
