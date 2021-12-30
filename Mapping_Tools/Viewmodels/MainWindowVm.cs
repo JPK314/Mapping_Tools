@@ -6,6 +6,7 @@ using Mapping_Tools.Views.Preferences;
 using Mapping_Tools.Views.Standard;
 using MaterialDesignThemes.Wpf;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
@@ -17,7 +18,11 @@ using System.Windows.Input;
 
 namespace Mapping_Tools.Viewmodels {
     public class MainWindowVm : BindableBase {
-        private readonly ICollectionView navigationItemsView;
+        private ICollectionView navigationItemsView;
+
+        private List<FrameworkElement> DefaultItems;
+        private List<FrameworkElement> ToolItems;
+        private List<FrameworkElement> FavoriteItems;
 
         public ViewCollection Views { get; set; }
 
@@ -52,15 +57,7 @@ namespace Mapping_Tools.Viewmodels {
         private ListBoxItem selectedPageItem;
         public ListBoxItem SelectedPageItem {
             get => selectedPageItem;
-            set {
-                if (Set(ref selectedPageItem, value)) {
-                    if (value?.Content == null)
-                        return;
-
-                    var toolName = value.Tag.ToString();
-                    SetCurrentView(toolName);
-                }
-            }
+            set => Set(ref selectedPageItem, value);
         }
 
         private string searchKeyword;
@@ -69,6 +66,8 @@ namespace Mapping_Tools.Viewmodels {
             set {
                 if (Set(ref searchKeyword, value)) {
                     navigationItemsView.Refresh();
+                    navigationItemsView.MoveCurrentToFirst();
+                    SelectedPageItem = navigationItemsView.CurrentItem as ListBoxItem;
                 }
             }
         }
@@ -116,49 +115,130 @@ namespace Mapping_Tools.Viewmodels {
 
             SetCurrentView(typeof(StandardView)); // Generate Standard view model to show on startup
 
-            NavigationItems = GenerateNavigationItems();
-
-            navigationItemsView = CollectionViewSource.GetDefaultView(NavigationItems);
-            navigationItemsView.Filter = SearchItemsFilter;
-
-            GoToSearchResult = new CommandImplementation(_ => {
-                var name = NavigationItems.FirstOrDefault(o => SearchItemsFilter(o))?.Tag?.ToString();
+            GoToSelectedPage = new CommandImplementation(_ => {
+                var item = selectedPageItem;
+                if (item?.Content == null) return;
+                string name = item.Tag.ToString();
                 if (string.IsNullOrEmpty(name)) return;
                 SetCurrentView(name);
                 SearchKeyword = string.Empty;
             });
 
-            ToggleNavigationDrawer = new CommandImplementation(p => {
+            SelectedPageUp = new CommandImplementation(_ => {
+                SelectedPageItem = navigationItemsView.CurrentItem as ListBoxItem;
+                SelectedPageItem?.Focus();
+            });
+
+            SelectedPageDown = new CommandImplementation(_ => {
+                SelectedPageItem = navigationItemsView.CurrentItem as ListBoxItem;
+                SelectedPageItem?.Focus();
+            });
+
+            ToggleNavigationDrawer = new CommandImplementation(_ => {
                 DrawerOpen = !DrawerOpen;
             });
+
+            GenerateNavigationItems();
+            UpdateNavigationItems();
         }
 
-        public CommandImplementation GoToSearchResult { get; }
+        public CommandImplementation GoToSelectedPage { get; }
+        public CommandImplementation SelectedPageUp { get; }
+        public CommandImplementation SelectedPageDown { get; }
         public CommandImplementation ToggleNavigationDrawer { get; }
 
-        private ObservableCollection<FrameworkElement> GenerateNavigationItems() {
+        private void GenerateDefaultItems() {
+            DefaultItems = new List<FrameworkElement> {
+                CreateNavigationItem(typeof(StandardView)),
+                CreateNavigationItem(typeof(PreferencesView))
+            };
+        }
+
+        private void GenerateToolItems() {
             var tools = ViewCollection.GetAllToolTypes()
-                .Where(o => o.GetCustomAttribute<HiddenToolAttribute>() == null)
-                .OrderBy(o => ViewCollection.GetName(o));
+                .Where(o => o.GetCustomAttribute<HiddenToolAttribute>() == null &&
+                            !SettingsManager.Settings.FavoriteTools.Contains(ViewCollection.GetName(o)))
+                .OrderBy(ViewCollection.GetName);
+            ToolItems = tools.Select(o => (FrameworkElement)CreateNavigationItem(o, 2)).ToList();
+        }
 
-            var collection = new ObservableCollection<FrameworkElement>();
+        private void GenerateFavoriteToolItems() {
+            var tools = ViewCollection.GetAllToolTypes()
+                .Where(o => o.GetCustomAttribute<HiddenToolAttribute>() == null &&
+                            SettingsManager.Settings.FavoriteTools.Contains(ViewCollection.GetName(o)))
+                .OrderBy(ViewCollection.GetName);
+            FavoriteItems = tools.Select(o => (FrameworkElement)CreateNavigationItem(o, 2)).ToList();
+        }
 
-            collection.Add(CreateNavigationItem(typeof(StandardView)));
-            collection.Add(CreateNavigationItem(typeof(PreferencesView)));
-            collection.Add(new Separator());
+        private void GenerateNavigationItems() {
+            GenerateDefaultItems();
+            GenerateFavoriteToolItems();
+            GenerateToolItems();
+        }
 
-            foreach (var tool in tools) {
-                collection.Add(CreateNavigationItem(tool, 2));
+        private void UpdateNavigationItems() {
+            var items = DefaultItems.Concat(new[] { new Separator() });
+
+            if (FavoriteItems.Count > 0) {
+                items = items.Concat(FavoriteItems).Concat(new[] { new Separator() });
             }
 
-            return collection;
+            items = items.Concat(ToolItems);
+            
+            NavigationItems = new ObservableCollection<FrameworkElement>(items);
+            navigationItemsView = CollectionViewSource.GetDefaultView(NavigationItems);
+            navigationItemsView.Filter = SearchItemsFilter;
         }
 
         private ListBoxItem CreateNavigationItem(Type type, double verticalMargin=4) {
             var name = ViewCollection.GetName(type);
             var content = new TextBlock { Text = name, Margin = new Thickness(10, verticalMargin, 0, verticalMargin) };
-            var item = new ListBoxItem { Tag = name, ToolTip = $"Open {name}.", Content = content };
+            var item = new ListBoxItem { Tag = name, ToolTip = $"Open {name}.", Content = content};
+            CreateContextMenu(item, name);
+            item.PreviewMouseLeftButtonDown += ItemOnPreviewMouseLeftButtonDown;
             return item;
+        }
+
+        private void ItemOnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
+            if (sender is ListBoxItem item) {
+                selectedPageItem = item;
+                GoToSelectedPage.Execute(null);
+                e.Handled = true;
+            }
+        }
+
+        private void CreateContextMenu(FrameworkElement item, string name) {
+            var cm = new ContextMenu();
+            var menuItem = new MenuItem { Tag = item };
+            UpdateMenuItem(menuItem, SettingsManager.Settings.FavoriteTools.Contains(name));
+            menuItem.Click += FavoriteItem_OnClick;
+            cm.Items.Add(menuItem);
+            item.ContextMenu = cm;
+        }
+
+        private void FavoriteItem_OnClick(object sender, RoutedEventArgs e) {
+            if (sender is MenuItem { Tag: ListBoxItem { Tag: string name } } mi) {
+                // Toggle favorite
+                // Update context menu
+                if (SettingsManager.Settings.FavoriteTools.Contains(name)) {
+                    SettingsManager.Settings.FavoriteTools.Remove(name);
+                    UpdateMenuItem(mi, false);
+                } else {
+                    SettingsManager.Settings.FavoriteTools.Add(name);
+                    UpdateMenuItem(mi, true);
+                }
+                // Update favorite list in UI
+                GenerateFavoriteToolItems();
+                GenerateToolItems();
+                UpdateNavigationItems();
+            }
+        }
+
+        private static void UpdateMenuItem(MenuItem mi, bool isFavorite) {
+            mi.Icon = isFavorite ?
+                new PackIcon { Kind = PackIconKind.Star } :
+                new PackIcon { Kind = PackIconKind.StarBorder };
+            mi.Header = isFavorite ? @"_Unfavorite" : @"_Favorite";
         }
 
         private bool SearchItemsFilter(object obj) {

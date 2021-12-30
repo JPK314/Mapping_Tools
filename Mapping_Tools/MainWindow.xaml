@@ -82,7 +82,11 @@
                             materialDesign:TextFieldAssist.TextFieldCornerRadius="4">
                             <TextBox.InputBindings>
                                 <KeyBinding Key="Return" 
-                                    Command="{Binding GoToSearchResult}"/>
+                                    Command="{Binding GoToSelectedPage}"/>
+                                <KeyBinding Key="Up" 
+                                            Command="{Binding SelectedPageUp}"/>
+                                <KeyBinding Key="Down" 
+                                            Command="{Binding SelectedPageDown}"/>
                             </TextBox.InputBindings>
                         </TextBox>
 
@@ -93,10 +97,15 @@
                             SelectedItem="{Binding SelectedPageItem, UpdateSourceTrigger=PropertyChanged}"
                             ItemsSource="{Binding NavigationItems}"
                             AutomationProperties.Name="ToolsMenu"
-                            Style="{StaticResource MaterialDesignListBox}">
+                            Style="{StaticResource MaterialDesignListBox}"
+                            IsTextSearchEnabled="True">
                             <ListBox.Resources>
                                 <Style TargetType="ScrollBar" BasedOn="{StaticResource MaterialDesignScrollBarMinimal}"/>
                             </ListBox.Resources>
+                            <ListBox.InputBindings>
+                                <KeyBinding Key="Return" 
+                                            Command="{Binding GoToSelectedPage}"/>
+                            </ListBox.InputBindings>
                         </ListBox>
                     </DockPanel>
                 </materialDesign:DrawerHost.LeftDrawerContent>
@@ -188,7 +197,7 @@
                             </StackPanel>
 
                             <materialDesign:ColorZone
-                                WindowChrome.IsHitTestVisibleInChrome="true" 
+                                WindowChrome.IsHitTestVisibleInChrome="False" 
                                 ToolTip="{Binding CurrentBeatmaps, Converter={StaticResource MapPathStringAddNewLinesConverter}}"
                                 VerticalAlignment="Center"
                                 Margin="10 0"

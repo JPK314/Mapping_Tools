@@ -15,8 +15,21 @@ namespace Mapping_Tools.Classes.Tools.SlideratorStuff {
             Vector2[] msLastSegStart = new Vector2[duration + 1];
             double ang;
             // We don't care about msLastSegStart[0] so we'll leave it at 0. Technically we could save one Vector2's worth of space here but it would make indexing harder to read than necessary.
+            // Find the first angle - we can't calculate the angle between points that are the same, but the sliderball's rotation should be the same as it was before.
+            double savedAng = 0;
             for (int i = 1; i < duration + 1; i++) {
-                ang = Math.Atan2(sbPositions[i - 1].Y - sbPositions[i].Y, sbPositions[i - 1].X - sbPositions[i].X);
+                if (sbPositions[0] != sbPositions[i]) {
+                    savedAng = Math.Atan2(sbPositions[i - 1].Y - sbPositions[i].Y, sbPositions[i - 1].X - sbPositions[i].X);
+                }
+            }
+            for (int i = 1; i < duration + 1; i++) {
+                if (sbPositions[i - 1] == sbPositions[i]) {
+                    ang = savedAng;
+                }
+                else {
+                    ang = Math.Atan2(sbPositions[i - 1].Y - sbPositions[i].Y, sbPositions[i - 1].X - sbPositions[i].X);
+                    savedAng = ang;
+                }
                 msLastSegStart[i] = new Vector2((float)(SNAPTOL * Math.Cos(ang) + (float)sbPositions[i].Rounded().X), (float)(SNAPTOL * Math.Sin(ang) + (float)sbPositions[i].Rounded().Y));
             }
 
@@ -28,7 +41,7 @@ namespace Mapping_Tools.Classes.Tools.SlideratorStuff {
 
             Vector2[] controlPoints = new Vector2[8 + 4 * (duration - 1)];
             Vector2 maxXY = new Vector2(768, 412);
-
+            long frameDist = (long)(2 * 67141632 + 2 * 33587200 + 2 * maxXY.X + 2 * maxXY.Y - sbPositions[0].X - sbPositions[0].Y - sbPositions[1].X - sbPositions[1].Y);
             List<Vector2> curMsPath = new List<Vector2>();
             // First ms travel adds SNAPTOL
             curMsPath.Add(sbPositions[0]);
@@ -53,7 +66,8 @@ namespace Mapping_Tools.Classes.Tools.SlideratorStuff {
 
             int ctrlPtIdx = 6;
             double correction = 0;
-
+            controlPoints[13] = new Vector2(sbPositions[1].X, sbPositions[1].Y);
+            int ctrlPtIdx = 14;
             for (int i = 2; i < duration + 1; i++) {
                 curMsPath.Clear();
                 // The first point on this path is the last point of the previous path
